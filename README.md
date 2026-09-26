@@ -96,8 +96,9 @@ references/                 METRICS.md, LIMITATIONS.md, EXAMPLES.md — linked
                              from SKILL.md for the agent to read on demand.
 tests/                      node:test; fixtures are real recorded API
                              responses, not hand-typed fakes.
-evals/                      Transcripts from running the skill against
-                             Claude Haiku, plus FINDINGS.md.
+evals/                      Findings from running the skill against
+                             Claude Haiku (FINDINGS.md per run) and the
+                             runner script; raw transcripts stay local.
 ```
 
 Data flow for `analyze`: `resolve.ts` turns a topic into a Wikidata QID and

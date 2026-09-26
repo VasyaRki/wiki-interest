@@ -3,4 +3,10 @@ dist/
 .wiki-interest/
 *.log
 .DS_Store
-evals
+# eval transcripts and PDFs stay local; findings and the runner are committed
+evals/*
+!evals/FINDINGS.md
+!evals/run_eval.sh
+!evals/run2/
+evals/run2/*
+!evals/run2/FINDINGS.md
