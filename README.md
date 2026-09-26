@@ -7,8 +7,8 @@ small, cheap agent (this was built and evaluated against Claude Haiku
 X, and which language/market should we launch in?" — with a chart and a
 one-page PDF report on request.
 
-All the math (normalization, trend detection, anomaly detection,
-confidence scoring) runs in plain TypeScript. The agent's job is limited
+All the math (normalization, seasonal adjustment, trend and anomaly
+detection, confidence scoring) runs in plain TypeScript. The agent's job is limited
 to picking a CLI command, passing arguments, and relaying the JSON it
 gets back — see `SKILL.md` for the agent-facing contract.
 
@@ -64,8 +64,7 @@ scripts/lib/
                              guesses between two equally-plausible topics).
   fetch.ts                  Wikimedia Pageviews REST client: User-Agent,
                              retry/backoff on 429/5xx, 404 = "no data" not
-                             a crash, correct monthly date-range bounds
-                             (see "What broke" below).
+                             a crash, correct monthly date-range bounds.
   cache.ts                  node:sqlite: HTTP response cache (keyed by
                              request URL) + run storage (settings +
                              resolved articles + the full analyze result,
@@ -108,3 +107,44 @@ article and per project (for normalization), through `cache.ts` →
 trend, anomalies, seasonality, and a confidence rating → `analyze.ts`
 assembles this into the compact JSON contract, generates the chart, and
 persists the run → the CLI prints it.
+## How it was verified
+
+AI tools (Claude Code) wrote most of the code; nothing was accepted on
+trust:
+
+- **Unit tests** (`npm test`) for every metric against synthetic series
+  with known answers, and for the API clients against real recorded
+  responses (`tests/fixtures/`), not hand-written fakes.
+- **Spot checks against the source.** Wikidata sitelinks and pageview
+  numbers were checked directly on the APIs for surprising results (e.g.
+  that Q1666254 really has no `plwiki` article).
+- **End-to-end runs on Claude Haiku 4.5** (`evals/`, runner
+  `evals/run_eval.sh`): the three sample questions from the task plus
+  follow-ups and PDF requests, in a clean folder with only this skill
+  installed. Every problem found in the transcripts was fixed and then
+  re-tested; fixes that only changed SKILL.md were not trusted until the
+  retest passed, and several were moved into code when they didn't.
+  Every generated PDF was checked to be exactly one page (`pdfinfo`).
+
+## Further development
+
+Roughly in priority order; each step is small enough to ship and
+re-evaluate on Haiku before the next.
+
+1. **Better topic coverage.** Suggest multi-QID baskets automatically
+   (subclasses, "facet of", related articles via Wikidata/SPARQL) and
+   fall back to language-specific search when an article has no Wikidata
+   sitelink.
+2. **Report recommendations.** A templated "what to explore next" block
+   in the PDF, driven by ranking and confidence rather than model prose;
+   localize `summary` and `caveats` for `--lang uk`.
+3. **Scale.** Batch mode for many topics × languages with a persistent
+   job queue and rate-limit budget; daily granularity for short-lived
+   spikes; Wikimedia pageview dumps instead of the REST API for large
+   historical backfills; export to CSV/Parquet for notebook analysis.
+4. **More signals.** Optional cross-checks from other sources (search
+   trends, app-store data) to reduce reliance on a single proxy.
+5. **Evals in CI.** Turn `evals/` into a regression suite: fixed
+   questions, assertions over transcripts (confidence stated, no
+   recommendation on `low`, full `pdf_path` given), run on every
+   SKILL.md or output-format change.

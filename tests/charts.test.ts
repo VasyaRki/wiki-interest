@@ -35,3 +35,16 @@ test("renderTrendChartSvg handles a single flat language with no anomalies and n
   const svg = await renderTrendChartSvg(languages);
   assert.match(svg, /^<svg /);
 });
+
+test("rolling mean starts only once a full 12-month window exists", async () => {
+  const months = monthRange("2024-01", "2025-12");
+  // Starts high and settles: a warm-up window would draw a fake early decline.
+  const svg = await renderTrendChartSvg([
+    { lang: "uk", points: months.map((month, i) => ({ month, value: i === 0 ? 60 : 10 })), anomalyMonths: new Set() },
+  ]);
+  const short = await renderTrendChartSvg([
+    { lang: "uk", points: months.slice(0, 11).map((month) => ({ month, value: 10 })), anomalyMonths: new Set() },
+  ]);
+  assert.match(svg, /^<svg /);
+  assert.match(short, /^<svg /);
+});

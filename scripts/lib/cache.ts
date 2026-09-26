@@ -88,6 +88,11 @@ export class Cache {
       mkdirSync(dirname(dbPath), { recursive: true });
     }
     this.#db = new DatabaseSync(dbPath);
+    // The cache is shared by every agent session on the machine: wait for a
+    // concurrent writer instead of failing with "database is locked", and use
+    // WAL so readers never block on a writer.
+    this.#db.exec("PRAGMA busy_timeout = 10000");
+    if (dbPath !== ":memory:") this.#db.exec("PRAGMA journal_mode = WAL");
     this.#db.exec(`
       CREATE TABLE IF NOT EXISTS http_cache (
         cache_key TEXT PRIMARY KEY,

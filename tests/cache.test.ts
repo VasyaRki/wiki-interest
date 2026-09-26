@@ -41,3 +41,35 @@ test("cache persists to disk across separate connections", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("several processes can write to the shared cache at once (parallel agent sessions)", async () => {
+  const { spawn } = await import("node:child_process");
+  const dir = mkdtempSync(join(tmpdir(), "wiki-interest-cache-concurrency-"));
+  const dbPath = join(dir, "cache.db");
+  const cacheModule = new URL("../scripts/lib/cache.ts", import.meta.url).href;
+  const worker = (id: number): Promise<{ code: number | null; stderr: string }> =>
+    new Promise((resolve) => {
+      const code = `
+        const { Cache } = await import(${JSON.stringify(cacheModule)});
+        const cache = new Cache(${JSON.stringify(dbPath)});
+        for (let i = 0; i < 300; i++) cache.set("w${id}-" + i, { status: "ok", body: { i } });
+        cache.close();
+      `;
+      const child = spawn(process.execPath, ["--no-warnings", "--import", "tsx", "--input-type=module", "-e", code]);
+      let stderr = "";
+      child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+      child.on("close", (exitCode) => resolve({ code: exitCode, stderr }));
+    });
+  try {
+    const results = await Promise.all([0, 1, 2, 3].map(worker));
+    for (const r of results) assert.equal(r.code, 0, r.stderr);
+    const cache = new Cache(dbPath);
+    try {
+      assert.deepEqual(cache.get("w3-299"), { status: "ok", body: { i: 299 } });
+    } finally {
+      cache.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

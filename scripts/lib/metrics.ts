@@ -262,45 +262,76 @@ export function analyzeTrendStability(series: NormalizedPoint[]): TrendStability
 // Seasonality
 // ---------------------------------------------------------------------------
 
+// With fewer than two observations per calendar month, a seasonal pattern
+// cannot be told apart from trend or a one-off spike.
+export const MIN_SEASONAL_MONTHS = 24;
+const SEASONAL_FIT_ITERATIONS = 5;
+
 export interface SeasonalityResult {
-  /** max/min ratio of average share_per_million by calendar month; null if too little data to compare. */
+  /** Peak/trough ratio of the seasonal pattern (trend removed); null if too little data to assess. */
   ratio: number | null;
-  /** 1-12 (January = 1), or null if no data at all. */
+  /** 1-12 (January = 1), or null if too little data to assess. */
   peakMonth: number | null;
   label: "none" | "weak" | "moderate" | "strong";
+  /** Log-space seasonal offset per calendar month (index 0 = January); null if too little data. */
+  offsets: number[] | null;
 }
 
+function calendarMonthIndex(month: string): number {
+  return Number(month.slice(5, 7)) - 1;
+}
+
+/**
+ * Seasonal pattern on the log share series, estimated jointly with the trend
+ * by backfitting: fit OLS on the deseasonalized series, take the median
+ * detrended residual per calendar month as that month's offset, repeat. The
+ * median keeps a one-off spike from being absorbed as "seasonal" once a
+ * calendar month has 3+ observations. Estimating the trend at the same time
+ * stops a declining series from reading as "peaks in the first months".
+ */
 export function computeSeasonality(series: NormalizedPoint[]): SeasonalityResult {
-  const sums = new Array<number>(12).fill(0);
+  if (series.length < MIN_SEASONAL_MONTHS) return { ratio: null, peakMonth: null, label: "none", offsets: null };
+
+  const logValues = series.map((p) => Math.log(p.sharePerMillion + LOG_EPSILON));
+  const groups = series.map((p) => calendarMonthIndex(p.month));
   const counts = new Array<number>(12).fill(0);
-  for (const point of series) {
-    const monthIndex = Number(point.month.slice(5, 7)) - 1;
-    sums[monthIndex] = (sums[monthIndex] ?? 0) + point.sharePerMillion;
-    counts[monthIndex] = (counts[monthIndex] ?? 0) + 1;
+  for (const g of groups) counts[g] = (counts[g] ?? 0) + 1;
+  const estimable = counts.map((c) => c >= 2);
+
+  let offsets = new Array<number>(12).fill(0);
+  for (let iter = 0; iter < SEASONAL_FIT_ITERATIONS; iter++) {
+    const adjusted: Array<[number, number]> = logValues.map((y, x) => [x, y - (offsets[groups[x]!] ?? 0)]);
+    const { m, b } = linearRegression(adjusted);
+    const residualsByGroup: number[][] = Array.from({ length: 12 }, () => []);
+    logValues.forEach((y, x) => residualsByGroup[groups[x]!]!.push(y - (m * x + b)));
+    const raw = residualsByGroup.map((r, g) => (estimable[g] ? median(r) : 0));
+    const estimated = raw.filter((_, g) => estimable[g]);
+    const center = estimated.length > 0 ? estimated.reduce((a, v) => a + v, 0) / estimated.length : 0;
+    offsets = raw.map((v, g) => (estimable[g] ? v - center : 0));
   }
 
-  const monthlyAverages = sums
-    .map((sum, i) => ({ month: i + 1, avg: (counts[i] ?? 0) > 0 ? sum / (counts[i] as number) : null }))
-    .filter((v): v is { month: number; avg: number } => v.avg !== null);
-
-  if (monthlyAverages.length < 2) {
-    return { ratio: null, peakMonth: monthlyAverages[0]?.month ?? null, label: "none" };
-  }
-
-  const max = monthlyAverages.reduce((a, b) => (b.avg > a.avg ? b : a));
-  const min = monthlyAverages.reduce((a, b) => (b.avg < a.avg ? b : a));
-
-  if (max.avg <= 0) {
-    // every calendar month averages exactly zero: nothing to call a "peak"
-    return { ratio: null, peakMonth: null, label: "none" };
-  }
-  if (min.avg <= 0) {
-    return { ratio: null, peakMonth: max.month, label: "strong" };
-  }
-
-  const ratio = max.avg / min.avg;
+  const candidates = offsets.map((v, g) => ({ month: g + 1, v })).filter((_, g) => estimable[g]);
+  if (candidates.length < 2) return { ratio: null, peakMonth: null, label: "none", offsets: null };
+  const max = candidates.reduce((a, b) => (b.v > a.v ? b : a));
+  const min = candidates.reduce((a, b) => (b.v < a.v ? b : a));
+  const ratio = Math.exp(max.v - min.v);
   const label: SeasonalityResult["label"] = ratio < 1.3 ? "none" : ratio < 2 ? "weak" : ratio < 4 ? "moderate" : "strong";
-  return { ratio, peakMonth: max.month, label };
+  return { ratio, peakMonth: max.month, label, offsets };
+}
+
+/**
+ * Removes the seasonal pattern from share_per_million, so trend and anomaly
+ * detection are not driven by a regular yearly peak (e.g. every September)
+ * or by which phase of the season the window happens to start in. Returns
+ * the series unchanged when there is no seasonality to remove.
+ */
+export function deseasonalize(series: NormalizedPoint[], seasonality: SeasonalityResult): NormalizedPoint[] {
+  const { offsets } = seasonality;
+  if (!offsets || seasonality.label === "none") return series;
+  return series.map((p) => ({
+    ...p,
+    sharePerMillion: (p.sharePerMillion + LOG_EPSILON) * Math.exp(-(offsets[calendarMonthIndex(p.month)] ?? 0)),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +353,11 @@ export interface ConfidenceInput {
   directionStableWithoutLast3Months: boolean;
 }
 
+/** "< 0.01" instead of a misleading "0.00". */
+export function formatPValue(p: number): string {
+  return p < 0.01 ? "< 0.01" : p.toFixed(2);
+}
+
 /** Deterministic rules, no model judgment involved. */
 export function computeConfidence(input: ConfidenceInput): ConfidenceResult {
   const { medianMonthlyViews, monthCount, trendPValue, directionStableWithoutAnomalies, directionStableWithoutLast3Months } =
@@ -331,7 +367,7 @@ export function computeConfidence(input: ConfidenceInput): ConfidenceResult {
   if (medianMonthlyViews < 100) lowTriggers.push(`median monthly views (${Math.round(medianMonthlyViews)}) is below 100`);
   if (monthCount < 12) lowTriggers.push(`only ${monthCount} months of data (fewer than 12)`);
   if (!directionStableWithoutAnomalies) lowTriggers.push("trend direction flips after removing anomalies");
-  if (trendPValue > 0.2) lowTriggers.push(`trend p-value (${trendPValue.toFixed(2)}) is above 0.2`);
+  if (trendPValue > 0.2) lowTriggers.push(`trend p-value (${formatPValue(trendPValue)}) is above 0.2`);
   if (lowTriggers.length > 0) return { level: "low", reasons: lowTriggers };
 
   const isHigh =
@@ -347,7 +383,7 @@ export function computeConfidence(input: ConfidenceInput): ConfidenceResult {
       reasons: [
         `median monthly views (${Math.round(medianMonthlyViews)}) is at least 1000`,
         `${monthCount} months of data (at least 24)`,
-        `trend p-value (${trendPValue.toFixed(2)}) is below 0.05`,
+        `trend p-value (${formatPValue(trendPValue)}) is below 0.05`,
         "trend direction is stable without anomalies and without the last 3 months",
       ],
     };
@@ -356,7 +392,7 @@ export function computeConfidence(input: ConfidenceInput): ConfidenceResult {
   const unmetHighCriteria: string[] = [];
   if (medianMonthlyViews < 1000) unmetHighCriteria.push(`median monthly views (${Math.round(medianMonthlyViews)}) is below 1000`);
   if (monthCount < 24) unmetHighCriteria.push(`only ${monthCount} months of data (fewer than 24)`);
-  if (trendPValue >= 0.05) unmetHighCriteria.push(`trend p-value (${trendPValue.toFixed(2)}) is not below 0.05`);
+  if (trendPValue >= 0.05) unmetHighCriteria.push(`trend p-value (${formatPValue(trendPValue)}) is not below 0.05`);
   if (!directionStableWithoutLast3Months) unmetHighCriteria.push("trend direction is not stable when the last 3 months are dropped");
 
   return {

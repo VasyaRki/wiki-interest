@@ -76,8 +76,11 @@ test("mergeArticlePoints sums views across multiple articles in a basket by mont
 });
 
 test("formatSeasonality formats a normal result and handles the no-data case", () => {
-  assert.equal(formatSeasonality({ ratio: 5, peakMonth: 1, label: "strong" }), "strong, peaks in January");
-  assert.equal(formatSeasonality({ ratio: null, peakMonth: null, label: "none" }), "not enough data to assess seasonality");
+  assert.equal(formatSeasonality({ ratio: 5, peakMonth: 1, label: "strong", offsets: null }), "strong, peaks in January");
+  assert.equal(
+    formatSeasonality({ ratio: null, peakMonth: null, label: "none", offsets: null }),
+    "not enough data to assess seasonality (needs at least 24 months)",
+  );
 });
 
 test("buildSummary mentions the top-ranked language and flags low confidence", () => {
@@ -98,8 +101,30 @@ test("buildSummary mentions the top-ranked language and flags low confidence", (
     },
   ];
   const summary = buildSummary(perLanguage, ["pl"]);
-  assert.match(summary, /pl/);
+  assert.match(summary, /^pl: 50 per million views/);
+  assert.doesNotMatch(summary, /strongest/);
   assert.match(summary, /weak signal/);
+});
+
+test("buildSummary with rankBy=growth describes the trend, not the share level", () => {
+  const row = (lang: string, share: number, slope: number): AnalyzeOutput["per_language"][number] => ({
+    lang,
+    articles: ["X"],
+    avg_monthly_views: 1000,
+    share_per_million: share,
+    yoy_growth_raw_pct: null,
+    yoy_growth_normalized_pct: null,
+    trend_slope_pct_per_year: slope,
+    trend_p_value: 0.01,
+    seasonality: "none",
+    anomalies: [],
+    confidence: "medium",
+    confidence_reasons: [],
+  });
+  const perLanguage = [row("uk", 13.7, -51.6), row("pl", 7.8, -26.2)];
+  const summary = buildSummary(perLanguage, ["pl", "uk"], "growth");
+  assert.match(summary, /^Ranked by trend: pl shows the slowest normalized decline \(-26\.2%\/year/);
+  assert.match(summary, /uk follows at -51\.6%\/year/);
 });
 
 // ---------------------------------------------------------------------------
@@ -190,7 +215,7 @@ test("runAnalyze: two languages, one missing an article, ranks and caveats corre
 
       assert.equal(result.ok, true);
       assert.match(result.run_id, /^r_\d{8}_[a-z0-9]+$/);
-      assert.deepEqual(result.question_scope, { qids: ["Q1"], langs: ["en", "pl"], from: "2024-09", to: "2026-08" });
+      assert.deepEqual(result.question_scope, { qids: ["Q1"], langs: ["en", "pl"], from: "2024-09", to: "2026-08", rank_by: "level" });
 
       const en = result.per_language.find((p) => p.lang === "en");
       const pl = result.per_language.find((p) => p.lang === "pl");
@@ -238,7 +263,11 @@ test("runAnalyze: --run inherits settings and applies only the new override", as
     const cache = new Cache(":memory:");
     try {
       const now = new Date(Date.UTC(2026, 8, 25));
-      const first = await runAnalyze(cache, { qids: ["Q1"], langs: ["en"], from: "2023-01", to: "2024-12" }, now);
+      const first = await runAnalyze(
+        cache,
+        { qids: ["Q1"], langs: ["en"], from: "2023-01", to: "2024-12", rankBy: "growth" },
+        now,
+      );
 
       // Follow-up: "now add Polish" - only --langs given, everything else should be inherited.
       const second = await runAnalyze(cache, { run: first.run_id, langs: ["en", "pl"] }, now);
@@ -246,6 +275,7 @@ test("runAnalyze: --run inherits settings and applies only the new override", as
       assert.equal(second.question_scope.from, "2023-01");
       assert.equal(second.question_scope.to, "2024-12");
       assert.deepEqual(second.question_scope.qids, ["Q1"]);
+      assert.equal(second.question_scope.rank_by, "growth");
       assert.deepEqual(
         second.per_language.map((p) => p.lang).sort(),
         ["en", "pl"],

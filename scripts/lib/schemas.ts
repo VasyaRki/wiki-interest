@@ -48,6 +48,7 @@ export const analyzeInputSchema = z
     to: yearMonthSchema.optional(),
     exclude: z.array(excludeRangeSchema).optional(),
     run: runIdSchema.optional(),
+    rankBy: z.enum(["level", "growth"]).optional(),
   })
   .refine((v) => (v.qids && v.qids.length > 0) || v.topic || v.run, {
     message: "one of --qid, --topic, or --run is required",
@@ -119,6 +120,8 @@ export const analyzeOutputSchema = z.object({
     langs: z.array(langCodeSchema),
     from: yearMonthSchema,
     to: yearMonthSchema,
+    /** Optional so runs stored before --rank-by existed still parse. */
+    rank_by: z.enum(["level", "growth"]).optional(),
   }),
   per_language: z.array(perLanguageOutputSchema),
   ranking: z.array(langCodeSchema),

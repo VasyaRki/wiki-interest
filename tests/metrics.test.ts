@@ -7,7 +7,9 @@ import {
   computeSeasonality,
   computeTrend,
   computeYoYGrowth,
+  deseasonalize,
   detectAnomalies,
+  formatPValue,
   monthRange,
   type NormalizedPoint,
 } from "../scripts/lib/metrics.js";
@@ -181,4 +183,51 @@ test("computeConfidence: decent but not high-bar data yields 'medium'", () => {
     directionStableWithoutLast3Months: true,
   });
   assert.equal(result.level, "medium");
+});
+
+test("seasonality is estimated net of trend: a steady decline alone is not called seasonal", () => {
+  const series = makeSeries("2024-09", 24, (t) => 100 * Math.pow(0.95, t));
+  assert.equal(computeSeasonality(series).label, "none");
+});
+
+test("fewer than 24 months: seasonality is not assessed", () => {
+  const series = makeSeries("2025-01", 18, (t) => (t % 12 === 8 ? 50 : 10));
+  const seasonality = computeSeasonality(series);
+  assert.equal(seasonality.peakMonth, null);
+  assert.equal(deseasonalize(series, seasonality), series);
+});
+
+test("a regular yearly peak is removed before anomaly detection and does not bend the trend", () => {
+  // Flat level with a September peak and a summer dip, starting in September
+  // (the window opens on a peak, which used to read as a steep decline).
+  const factor = (monthIndex: number): number => (monthIndex === 8 ? 4 : monthIndex >= 5 && monthIndex <= 7 ? 0.5 : 1);
+  const rand = mulberry32(7);
+  const series = makeSeries("2024-09", 24, (t) => 20 * factor((t + 8) % 12) * (1 + (rand() - 0.5) * 0.1));
+
+  // Unadjusted, the September peaks and summer dips are flagged as anomalies.
+  assert.ok(detectAnomalies(series).length > 0);
+
+  const seasonality = computeSeasonality(series);
+  assert.equal(seasonality.peakMonth, 9);
+  assert.notEqual(seasonality.label, "none");
+
+  const adjusted = deseasonalize(series, seasonality);
+  assert.equal(detectAnomalies(adjusted).length, 0);
+  const trend = computeTrend(adjusted.map((p) => p.sharePerMillion));
+  assert.ok(Math.abs(trend.slopePctPerYear) < 5, `expected ~flat trend, got ${trend.slopePctPerYear}`);
+  assert.ok(trend.pValue > 0.05, `expected no significant trend, got p=${trend.pValue}`);
+});
+
+test("a one-off spike on top of seasonality is still flagged after adjustment", () => {
+  const factor = (monthIndex: number): number => (monthIndex === 8 ? 4 : 1);
+  const rand = mulberry32(11);
+  const series = makeSeries("2022-01", 48, (t) => 20 * factor(t % 12) * (1 + (rand() - 0.5) * 0.1) * (t === 29 ? 10 : 1));
+  const adjusted = deseasonalize(series, computeSeasonality(series));
+  const anomalies = detectAnomalies(adjusted);
+  assert.deepEqual(anomalies.map((a) => a.month), ["2024-06"]);
+});
+
+test("formatPValue never prints a misleading 0.00", () => {
+  assert.equal(formatPValue(0.002), "< 0.01");
+  assert.equal(formatPValue(0.034), "0.03");
 });

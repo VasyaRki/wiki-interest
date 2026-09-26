@@ -10,3 +10,6 @@ evals/*
 !evals/run2/
 evals/run2/*
 !evals/run2/FINDINGS.md
+!evals/run3/
+evals/run3/*
+!evals/run3/FINDINGS.md

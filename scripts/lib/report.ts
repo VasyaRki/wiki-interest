@@ -246,11 +246,13 @@ export async function generateReport(cache: Cache, input: GenerateReportInput): 
   doc.font("Body-Bold").fontSize(8).text(labels.assumptions, MARGIN, footerY, { width: CONTENT_WIDTH });
   footerY += doc.heightOfString(labels.assumptions, { width: CONTENT_WIDTH }) + 1;
   doc.font("Body").fontSize(7).fillColor("#555555");
+  const sourceY = PAGE_HEIGHT - MARGIN - 10;
   const assumptionsText = [...labels.assumptionsList, ...result.caveats].map((line) => `• ${line}`).join("\n");
-  doc.text(assumptionsText, MARGIN, footerY, { width: CONTENT_WIDTH, height: FOOTER_HEIGHT - 30, ellipsis: true });
+  // Use all the space down to the source line: a short table leaves room for
+  // every caveat, and the ellipsis only kicks in on a genuinely full page.
+  doc.text(assumptionsText, MARGIN, footerY, { width: CONTENT_WIDTH, height: sourceY - footerY - 6, ellipsis: true });
   doc.fillColor("black");
 
-  const sourceY = PAGE_HEIGHT - MARGIN - 10;
   doc
     .font("Body")
     .fontSize(7)

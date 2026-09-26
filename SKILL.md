@@ -36,9 +36,14 @@ stdout is always one JSON object. Success has `"ok": true`. Failure has
    `best_qid` directly, without asking.
 4. Answer the user in chat using `summary`, `per_language`, `ranking`, and
    `caveats` from the JSON. See Interpretation rules below.
-5. Then ask the user once: "Do you want a one-page PDF report saved in
-   the current folder, or is the answer in chat enough?" Run **report** only if they say yes. If they asked for a
-   report in their original question, skip the question and run it.
+5. **Report.** If the user asked for a report, PDF, or something to
+   share (in any language, e.g. "звіт") anywhere in the conversation —
+   including their first message, even if a clarifying question came in
+   between — run **report** right after `analyze`, without asking. Do
+   this even when confidence is `low`: the report states the limitations.
+   Otherwise ask once: "Do you want a one-page PDF report saved in the
+   current folder, or is the answer in chat enough?" and run **report**
+   only if they say yes.
 
 If `analyze` comes back with thin or no data everywhere (every language
 `low` confidence or `articles: []`), first report that plainly — it's a
@@ -59,12 +64,16 @@ silently substitute a different topic than the one you resolved.
 
 ### analyze
 ```
-<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --qid <QID> [--qid <QID> ...] --langs <codes> [--period <N>m | --from <YYYY-MM> --to <YYYY-MM>] [--exclude <YYYY-MM>:<YYYY-MM>] [--run <run_id>]
+<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --qid <QID> [--qid <QID> ...] --langs <codes> [--period <N>m | --from <YYYY-MM> --to <YYYY-MM>] [--exclude <YYYY-MM>:<YYYY-MM>] [--rank-by level|growth] [--run <run_id>]
 ```
 Multiple `--qid` sums views across all of them as one topic basket.
 Default period is the last 24 months if you pass neither `--period` nor
 `--from`/`--to`. `--exclude` removes a month range from the analysis (e.g.
 a known traffic anomaly); repeat it for multiple ranges.
+`--rank-by` decides the order in `ranking`: `level` (default) = where the
+topic has the largest share of readers now; `growth` = where interest is
+growing fastest. Use `growth` when the user asks about growth, rising
+interest, or momentum; otherwise keep the default.
 
 ### report
 ```
@@ -137,7 +146,8 @@ More worked examples with real output: `references/EXAMPLES.md`.
   call it "the clearer pick".
 - `anomalies` are one-off spikes or dips, not seasonality. If there are
   any, mention them briefly and keep them separate from the `seasonality`
-  field.
+  field. When a caveat says trend was computed after removing a yearly
+  pattern, say the trend is seasonally adjusted.
 - See `references/LIMITATIONS.md` before making strong claims from a
   single run.
 

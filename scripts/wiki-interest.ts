@@ -84,6 +84,7 @@ program
   .option("--to <yyyy-mm>", "end month")
   .option("--exclude <range>", "month range to exclude, e.g. 2020-03:2020-06; repeatable", (v, prev: string[]) => [...prev, v], [] as string[])
   .option("--run <run_id>", "reuse a previous run's articles and settings")
+  .option("--rank-by <key>", "rank languages by: level (normalized share, default) or growth (trend slope); inherited from --run")
   .action(async (opts) => {
     const cache = new Cache();
     try {
@@ -96,6 +97,7 @@ program
         to: opts.to,
         exclude: opts.exclude.length > 0 ? opts.exclude : undefined,
         run: opts.run,
+        rankBy: opts.rankBy,
       });
       const result = await runAnalyze(cache, input);
       emitSuccess(analyzeOutputSchema.parse(result));

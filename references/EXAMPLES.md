@@ -17,7 +17,8 @@ changes — the shapes and fields will not.
   "search_lang": "en",
   "candidates": [
     { "qid": "Q1666254", "label": "intermittent fasting", "description": "a diet that cycles between a period of fasting and non-fasting" },
-    { "qid": "Q112575736", "label": "Intermittent Fasting Can Make Us Healthier", "description": "Article published in Scientific European on 15 January 2019" }
+    { "qid": "Q112575736", "label": "Intermittent Fasting Can Make Us Healthier", "description": "Article published in Scientific European on 15 January 2019" },
+    "... 5 more candidates (clinical trials, a book, a podcast episode) trimmed"
   ],
   "needs_confirmation": false,
   "best_qid": "Q1666254",
@@ -37,8 +38,8 @@ here — expect `analyze` to report it as "nothing measured" too.
 ```json
 {
   "ok": true,
-  "run_id": "r_20260925_9kxbjq",
-  "question_scope": { "qids": ["Q1666254"], "langs": ["pl", "cs"], "from": "2024-09", "to": "2026-08" },
+  "run_id": "r_20260926_bwtjnm",
+  "question_scope": { "qids": ["Q1666254"], "langs": ["pl", "cs"], "from": "2024-09", "to": "2026-08", "rank_by": "level" },
   "per_language": [
     {
       "lang": "pl", "articles": [], "avg_monthly_views": null, "share_per_million": null,
@@ -51,20 +52,21 @@ here — expect `analyze` to report it as "nothing measured" too.
     {
       "lang": "cs", "articles": ["Přerušovaný půst"], "avg_monthly_views": 289, "share_per_million": 4.4,
       "yoy_growth_raw_pct": -53.6, "yoy_growth_normalized_pct": -47.7,
-      "trend_slope_pct_per_year": -45.7, "trend_p_value": 0.002,
+      "trend_slope_pct_per_year": -46.7, "trend_p_value": 0.002,
       "seasonality": "moderate, peaks in April",
-      "anomalies": [{ "month": "2025-04", "views": 958, "z": 3.1 }],
+      "anomalies": [],
       "confidence": "medium",
       "confidence_reasons": ["median monthly views (232) is below 1000"]
     }
   ],
   "ranking": ["cs"],
-  "summary": "cs is the only language with data (4.4 per million views), with declining interest (-45.7%/year), at medium confidence. Its first place is not a win over the other languages, which could not be measured. No Wikipedia article exists in pl, so nothing was measured there; this says nothing about interest in that language.",
+  "summary": "cs is the only language with data (4.4 per million views), with declining interest (-46.7%/year), at medium confidence. Its first place is not a win over the other languages, which could not be measured. No Wikipedia article exists in pl, so nothing was measured there; this says nothing about interest in that language.",
   "caveats": [
     "pl: no Wikipedia article exists for this topic in this language, so nothing was measured; excluded from the ranking. Do not infer anything about interest in pl from this.",
+    "cs: moderate, peaks in April; trend and anomalies are computed after removing this yearly pattern, so a regular seasonal peak is not reported as growth or as an anomaly. With under 3 years of data the pattern rests on 2 observations per calendar month, so a one-off spike can be partly absorbed as seasonal; use --period 36m or longer to separate them.",
     "Pageviews reflect reader interest, not purchase intent or willingness to pay."
   ],
-  "chart_path": "/home/user/.cache/wiki-interest/runs/r_20260925_9kxbjq/trend.svg"
+  "chart_path": "/home/user/.cache/wiki-interest/runs/r_20260926_bwtjnm/trend.svg"
 }
 ```
 
@@ -72,7 +74,9 @@ here — expect `analyze` to report it as "nothing measured" too.
 medium confidence; pl has no Wikipedia article on this topic at all, so
 there's no evidence either way for Polish — that's not the same as "no
 interest in Poland". Mention the normalization (`share_per_million`) and
-the medium confidence explicitly.
+the medium confidence explicitly. The cs trend is seasonally adjusted (the
+April peak is removed before fitting it), so say so; the April peak itself
+is seasonality, not an anomaly.
 
 ## 2. A single-language question: "astronomy" in Ukraine
 
@@ -83,12 +87,52 @@ the medium confidence explicitly.
 ```json
 {
   "ok": true, "topic": "astronomy", "search_lang": "en",
+  "candidates": [
+    { "qid": "Q333", "label": "astronomy", "description": "natural science studying celestial objects and phenomena in the cosmos" },
+    "... 6 more candidates (journals, a song, a magazine, astrobiology) trimmed"
+  ],
   "needs_confirmation": false, "best_qid": "Q333",
   "articles": { "uk": "Астрономія" }, "notes": []
 }
 ```
 
-Then `analyze --qid Q333 --langs uk` the same way as above.
+```
+<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --qid Q333 --langs uk
+```
+
+```json
+{
+  "ok": true,
+  "run_id": "r_20260926_31bl4l",
+  "question_scope": { "qids": ["Q333"], "langs": ["uk"], "from": "2024-09", "to": "2026-08", "rank_by": "level" },
+  "per_language": [
+    {
+      "lang": "uk", "articles": ["Астрономія"], "avg_monthly_views": 972, "share_per_million": 13.7,
+      "yoy_growth_raw_pct": -59.6, "yoy_growth_normalized_pct": -45.5,
+      "trend_slope_pct_per_year": -37.4, "trend_p_value": 0.002,
+      "seasonality": "strong, peaks in September",
+      "anomalies": [],
+      "confidence": "medium",
+      "confidence_reasons": ["median monthly views (611) is below 1000"]
+    }
+  ],
+  "ranking": ["uk"],
+  "summary": "uk: 13.7 per million views, with declining interest (-37.4%/year), at medium confidence.",
+  "caveats": [
+    "uk: strong, peaks in September; trend and anomalies are computed after removing this yearly pattern, so a regular seasonal peak is not reported as growth or as an anomaly. With under 3 years of data the pattern rests on 2 observations per calendar month, so a one-off spike can be partly absorbed as seasonal; use --period 36m or longer to separate them.",
+    "Pageviews reflect reader interest, not purchase intent or willingness to pay."
+  ],
+  "chart_path": "/home/user/.cache/wiki-interest/runs/r_20260926_31bl4l/trend.svg"
+}
+```
+
+**How to answer the user:** interest in astronomy on Ukrainian Wikipedia
+is declining (−37.4%/year, seasonally adjusted, normalized), at medium
+confidence because traffic is modest (median 611 views/month). There is a
+strong school-year pattern peaking in September; that is seasonality, not
+growth. The caveat notes only 2 years of data: if the user wants to know
+whether the decline is real or partly a one-off 2024 spike, suggest
+re-running with `--run r_20260926_31bl4l --period 36m`.
 
 ## 3. Ambiguous topic: "mercury"
 
@@ -104,7 +148,8 @@ Then `analyze --qid Q333 --langs uk` the same way as above.
     { "qid": "Q1231263", "label": "Mercury", "description": "commune in Savoie, France" },
     { "qid": "Q308", "label": "Mercury", "description": "first planet from the Solar System..." },
     { "qid": "Q925", "label": "mercury", "description": "chemical element with symbol Hg and atomic number 80" },
-    { "qid": "Q1150", "label": "Mercury", "description": "Roman god of trade, merchants, thieves and travel" }
+    { "qid": "Q1150", "label": "Mercury", "description": "Roman god of trade, merchants, thieves and travel" },
+    "... 2 more candidates trimmed"
   ],
   "needs_confirmation": true,
   "best_qid": "Q613883",
@@ -134,39 +179,74 @@ resolving first, it refuses the same way:
 Reuse the run id from example 1 instead of re-resolving:
 
 ```
-<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --run r_20260925_9kxbjq --langs pl,cs,sk
+<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --run r_20260926_bwtjnm --langs pl,cs,sk
 ```
 
 ```json
 {
-  "run_id": "r_20260925_x635d4",
-  "question_scope": { "qids": ["Q1666254"], "langs": ["pl", "cs", "sk"], "from": "2024-09", "to": "2026-08" }
+  "run_id": "r_20260926_jd2wqo",
+  "question_scope": { "qids": ["Q1666254"], "langs": ["pl", "cs", "sk"], "from": "2024-09", "to": "2026-08", "rank_by": "level" },
+  "ranking": ["cs"],
+  "summary": "cs is the only language with data (4.4 per million views), with declining interest (-46.7%/year), at medium confidence. Its first place is not a win over the other languages, which could not be measured. No Wikipedia article exists in pl, sk, so nothing was measured there; this says nothing about interest in those languages."
 }
 ```
 
-The topic (`qids`), period (`from`/`to`), and any excludes all carried over
-unchanged from `r_20260925_9kxbjq` — only `--langs` was overridden. This
+(`per_language` and `caveats` trimmed.) The topic (`qids`), period
+(`from`/`to`), `rank_by`, and any excludes all carried over unchanged from
+`r_20260926_bwtjnm` — only `--langs` was overridden. Slovak has no article
+either, so it is reported exactly like Polish. This
 also created a **new** run id; the original run is untouched, so you can
-still `report --run r_20260925_9kxbjq` for the 2-language version.
+still `report --run r_20260926_bwtjnm` for the 2-language version.
 
 For "use 5 years instead", the equivalent call is
 `analyze --run <run_id> --period 60m` (only the period changes, langs and
 topic are inherited the same way).
 
-## 5. Writing a report
+## 5. Ranking by growth instead of size
+
+"Where is interest in astronomy growing fastest — Ukrainian, Polish or
+Czech?" asks about growth, so pass `--rank-by growth`:
 
 ```
-<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts report --run r_20260925_9kxbjq --question "Should we launch our intermittent fasting course in Polish or Czech?" --lang en
+<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts analyze --qid Q333 --langs uk,pl,cs --rank-by growth
 ```
 
 ```json
-{ "ok": true, "run_id": "r_20260925_9kxbjq", "pdf_path": "/home/user/projects/wiki-interest-r_20260925_9kxbjq-en.pdf" }
+{
+  "ok": true,
+  "run_id": "r_20260926_vy0v7c",
+  "question_scope": { "qids": ["Q333"], "langs": ["uk", "pl", "cs"], "from": "2024-09", "to": "2026-08", "rank_by": "growth" },
+  "per_language": [
+    { "lang": "uk", "share_per_million": 13.7, "trend_slope_pct_per_year": -37.4, "trend_p_value": 0.002, "seasonality": "strong, peaks in September", "confidence": "medium" },
+    { "lang": "pl", "share_per_million": 7.8, "trend_slope_pct_per_year": -12.4, "trend_p_value": 0.016, "seasonality": "moderate, peaks in November", "confidence": "high" },
+    { "lang": "cs", "share_per_million": 10, "trend_slope_pct_per_year": -18.8, "trend_p_value": 0.006, "seasonality": "weak, peaks in September", "confidence": "medium" }
+  ],
+  "ranking": ["pl", "cs", "uk"],
+  "summary": "Ranked by trend: pl shows the slowest normalized decline (-12.4%/year, 7.8 per million views), at high confidence. cs follows at -18.8%/year."
+}
+```
+
+(`per_language` fields and `caveats` trimmed.) With the default
+`--rank-by level` the order would be uk, cs, pl — uk has the largest share
+of readers but the steepest decline. All three are declining, so the
+honest answer is "declining slowest", not "growing": relay the `summary`
+wording as is. A follow-up with `--run r_20260926_vy0v7c` keeps
+`rank_by: growth` unless you pass `--rank-by level`.
+
+## 6. Writing a report
+
+```
+<skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts report --run r_20260926_bwtjnm --question "Should we launch our intermittent fasting course in Polish or Czech?" --lang en
+```
+
+```json
+{ "ok": true, "run_id": "r_20260926_bwtjnm", "pdf_path": "/home/user/projects/wiki-interest-r_20260926_bwtjnm-en.pdf" }
 ```
 
 The PDF is always exactly one page. Pass `--lang uk` for a Ukrainian report
 (labels and headers only — see `references/LIMITATIONS.md`).
 
-## 6. Listing runs
+## 7. Listing runs
 
 ```
 <skill-dir>/node_modules/.bin/tsx <skill-dir>/scripts/wiki-interest.ts runs --limit 5
@@ -176,8 +256,10 @@ The PDF is always exactly one page. Pass `--lang uk` for a Ukrainian report
 {
   "ok": true,
   "runs": [
-    { "run_id": "r_20260925_x635d4", "created_at": "2026-09-25T16:36:27.684Z", "topic": null, "qids": ["Q1666254"], "langs": ["pl", "cs", "sk"], "from": "2024-09", "to": "2026-08" },
-    { "run_id": "r_20260925_9kxbjq", "created_at": "2026-09-25T16:36:14.673Z", "topic": null, "qids": ["Q1666254"], "langs": ["pl", "cs"], "from": "2024-09", "to": "2026-08" }
+    { "run_id": "r_20260926_vy0v7c", "created_at": "2026-09-26T14:32:27.351Z", "topic": null, "qids": ["Q333"], "langs": ["uk", "pl", "cs"], "from": "2024-09", "to": "2026-08" },
+    { "run_id": "r_20260926_31bl4l", "created_at": "2026-09-26T14:32:25.335Z", "topic": null, "qids": ["Q333"], "langs": ["uk"], "from": "2024-09", "to": "2026-08" },
+    { "run_id": "r_20260926_jd2wqo", "created_at": "2026-09-26T14:32:21.136Z", "topic": null, "qids": ["Q1666254"], "langs": ["pl", "cs", "sk"], "from": "2024-09", "to": "2026-08" },
+    { "run_id": "r_20260926_bwtjnm", "created_at": "2026-09-26T14:32:19.272Z", "topic": null, "qids": ["Q1666254"], "langs": ["pl", "cs"], "from": "2024-09", "to": "2026-08" }
   ]
 }
 ```
@@ -185,10 +267,9 @@ The PDF is always exactly one page. Pass `--lang uk` for a Ukrainian report
 Use this when the user references an earlier analysis but you don't have
 its run id handy.
 
-## 7. Errors
+## 8. Errors
 
-Every failure looks like this (`resolve` with an unknown run id shown for
-`report`):
+Every failure looks like this (here, `report` with an unknown run id):
 
 ```json
 {

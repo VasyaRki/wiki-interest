@@ -37,10 +37,14 @@ function monthToIsoDate(month: string): string {
   return `${month}-01`;
 }
 
-/** Trailing mean over up to the last 12 months (fewer at the start of the series). */
+/**
+ * Trailing mean over the last 12 months, starting only once a full window
+ * exists: a shorter warm-up window just echoes the first few months and
+ * draws a steep fake trend at the start of the chart.
+ */
 function rollingMean(points: ChartSeriesPoint[]): ChartSeriesPoint[] {
-  return points.map((p, i) => {
-    const window = points.slice(Math.max(0, i - ROLLING_WINDOW_MONTHS + 1), i + 1);
+  return points.slice(ROLLING_WINDOW_MONTHS - 1).map((p, i) => {
+    const window = points.slice(i, i + ROLLING_WINDOW_MONTHS);
     const mean = window.reduce((sum, w) => sum + w.value, 0) / window.length;
     return { month: p.month, value: mean };
   });

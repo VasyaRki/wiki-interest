@@ -13,6 +13,8 @@ import {
   computeSeasonality,
   computeTrend,
   computeYoYGrowth,
+  deseasonalize,
+  MIN_SEASONAL_MONTHS,
   type MonthlyPoint,
   type NormalizedPoint,
   type SeasonalityResult,
@@ -32,7 +34,11 @@ export interface AnalyzeCliInput {
   to?: string | undefined;
   exclude?: string[] | undefined;
   run?: string | undefined;
+  rankBy?: RankBy | undefined;
 }
+
+/** level = average normalized share; growth = normalized trend slope. */
+export type RankBy = "level" | "growth";
 
 // ---------------------------------------------------------------------------
 // Date range
@@ -113,7 +119,7 @@ const MONTH_NAMES = [
 ];
 
 export function formatSeasonality(s: SeasonalityResult): string {
-  if (s.peakMonth === null) return "not enough data to assess seasonality";
+  if (s.peakMonth === null) return `not enough data to assess seasonality (needs at least ${MIN_SEASONAL_MONTHS} months)`;
   const monthName = MONTH_NAMES[s.peakMonth - 1];
   return `${s.label}, peaks in ${monthName}`;
 }
@@ -125,7 +131,11 @@ function anomalyReasons(stability: ReturnType<typeof analyzeTrendStability>): st
   return [`${n} anomalous month${n === 1 ? "" : "s"} found; trend direction holds without ${n === 1 ? "it" : "them"}`];
 }
 
-export function buildSummary(perLanguage: AnalyzeOutput["per_language"], ranking: string[]): string {
+export function buildSummary(
+  perLanguage: AnalyzeOutput["per_language"],
+  ranking: string[],
+  rankBy: RankBy = "level",
+): string {
   const missing = perLanguage.filter((p) => p.articles.length === 0).map((p) => p.lang);
   const missingSentence =
     missing.length > 0
@@ -147,15 +157,31 @@ export function buildSummary(perLanguage: AnalyzeOutput["per_language"], ranking
         ? `growing interest (+${top.trend_slope_pct_per_year}%/year)`
         : `declining interest (${top.trend_slope_pct_per_year}%/year)`;
 
-  let sentence =
-    ranking.length === 1 && perLanguage.length > 1
-      ? `${top.lang} is the only language with data (${top.share_per_million} per million views), with ${trendPhrase}, at ${top.confidence} confidence. Its first place is not a win over the other languages, which could not be measured.`
-      : `${top.lang} shows the strongest normalized interest (${top.share_per_million} per million views) with ${trendPhrase}, at ${top.confidence} confidence.`;
+  const fmtSlope = (n: number | null): string => (n === null ? "an unclear trend" : `${n > 0 ? "+" : ""}${n}%/year`);
+  let sentence: string;
+  if (perLanguage.length === 1) {
+    sentence = `${top.lang}: ${top.share_per_million} per million views, with ${trendPhrase}, at ${top.confidence} confidence.`;
+  } else if (ranking.length === 1) {
+    sentence = `${top.lang} is the only language with data (${top.share_per_million} per million views), with ${trendPhrase}, at ${top.confidence} confidence. Its first place is not a win over the other languages, which could not be measured.`;
+  } else if (rankBy === "growth") {
+    const growthPhrase =
+      top.trend_slope_pct_per_year !== null && top.trend_slope_pct_per_year < 0
+        ? "the slowest normalized decline"
+        : "the fastest normalized growth";
+    sentence = `Ranked by trend: ${top.lang} shows ${growthPhrase} (${fmtSlope(top.trend_slope_pct_per_year)}, ${top.share_per_million} per million views), at ${top.confidence} confidence.`;
+  } else {
+    sentence = `${top.lang} shows the strongest normalized interest (${top.share_per_million} per million views) with ${trendPhrase}, at ${top.confidence} confidence.`;
+  }
 
   if (ranking.length > 1) {
     const secondLang = ranking[1] as string;
     const second = perLanguage.find((p) => p.lang === secondLang);
-    if (second) sentence += ` ${second.lang} follows at ${second.share_per_million} per million.`;
+    if (second) {
+      sentence +=
+        rankBy === "growth"
+          ? ` ${second.lang} follows at ${fmtSlope(second.trend_slope_pct_per_year)}.`
+          : ` ${second.lang} follows at ${second.share_per_million} per million.`;
+    }
   }
 
   if (top.confidence === "low") {
@@ -246,6 +272,8 @@ export async function runAnalyze(cache: Cache, input: AnalyzeCliInput, now: Date
   // ---- date range, excludes ----
   const { from, to } = resolveDateRange(input, priorRun ? { from: priorRun.from, to: priorRun.to } : undefined, now);
   const exclude = input.exclude && input.exclude.length > 0 ? input.exclude : (priorRun?.exclude ?? []);
+  const priorResult = priorRun ? analyzeOutputSchema.safeParse(priorRun.result) : undefined;
+  const rankBy: RankBy = input.rankBy ?? (priorResult?.success ? priorResult.data.question_scope.rank_by : undefined) ?? "level";
 
   // ---- articles per language (always re-fetched fresh; cached HTTP calls make this cheap) ----
   const articlesByLang: Record<string, string[]> = Object.fromEntries(langs.map((l) => [l, [] as string[]]));
@@ -303,13 +331,22 @@ export async function runAnalyze(cache: Cache, input: AnalyzeCliInput, now: Date
       continue;
     }
 
-    const shares = series.map((p) => p.sharePerMillion);
     const yoy = computeYoYGrowth(series);
     if (yoy.caveat) caveats.add(`${lang}: ${yoy.caveat}`);
 
-    const trend = computeTrend(shares);
-    const stability = analyzeTrendStability(series);
     const seasonality = computeSeasonality(series);
+    const adjusted = deseasonalize(series, seasonality);
+    if (adjusted !== series) {
+      caveats.add(
+        `${lang}: ${formatSeasonality(seasonality)}; trend and anomalies are computed after removing this yearly pattern, so a regular seasonal peak is not reported as growth or as an anomaly.${
+          series.length < 36
+            ? " With under 3 years of data the pattern rests on 2 observations per calendar month, so a one-off spike can be partly absorbed as seasonal; use --period 36m or longer to separate them."
+            : ""
+        }`,
+      );
+    }
+    const trend = computeTrend(adjusted.map((p) => p.sharePerMillion));
+    const stability = analyzeTrendStability(adjusted);
     const medianViews = series.length > 0 ? median(series.map((p) => p.views)) : 0;
     const confidence = computeConfidence({
       medianMonthlyViews: medianViews,
@@ -349,14 +386,15 @@ export async function runAnalyze(cache: Cache, input: AnalyzeCliInput, now: Date
   }
   caveats.add("Pageviews reflect reader interest, not purchase intent or willingness to pay.");
 
+  const rankKey = (p: AnalyzeOutput["per_language"][number]): number | null =>
+    rankBy === "growth" ? p.trend_slope_pct_per_year : p.share_per_million;
   const ranking = perLanguage
-    .filter((p) => p.share_per_million !== null)
-    .sort((a, b) => (b.share_per_million ?? 0) - (a.share_per_million ?? 0))
+    .filter((p) => rankKey(p) !== null)
+    .sort((a, b) => (rankKey(b) ?? 0) - (rankKey(a) ?? 0))
     .map((p) => p.lang);
-  let summary = buildSummary(perLanguage, ranking);
-  if (priorRun && (priorRun.from !== from || priorRun.to !== to)) {
-    const prior = analyzeOutputSchema.safeParse(priorRun.result);
-    if (prior.success) summary += comparePeriods(prior.data, perLanguage, from, to);
+  let summary = buildSummary(perLanguage, ranking, rankBy);
+  if (priorRun && (priorRun.from !== from || priorRun.to !== to) && priorResult?.success) {
+    summary += comparePeriods(priorResult.data, perLanguage, from, to);
   }
   const runId = generateRunId(now);
 
@@ -375,7 +413,7 @@ export async function runAnalyze(cache: Cache, input: AnalyzeCliInput, now: Date
   const output: AnalyzeOutput = {
     ok: true,
     run_id: runId,
-    question_scope: { qids, langs, from, to },
+    question_scope: { qids, langs, from, to, rank_by: rankBy },
     per_language: perLanguage,
     ranking,
     summary,
