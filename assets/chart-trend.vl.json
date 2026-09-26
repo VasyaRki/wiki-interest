@@ -1,0 +1,53 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": {
+    "text": "Normalized Wikipedia interest (share per million monthly pageviews)",
+    "subtitle": "Bold line = 12-month rolling mean. ◆ = anomaly (|z| > 3).",
+    "fontSize": 14,
+    "subtitleFontSize": 10
+  },
+  "width": 500,
+  "height": 220,
+  "autosize": { "type": "pad", "contains": "padding" },
+  "background": "white",
+  "datasets": {
+    "series": [],
+    "anomalies": []
+  },
+  "resolve": { "scale": { "color": "shared" } },
+  "layer": [
+    {
+      "data": { "name": "series" },
+      "transform": [{ "filter": "datum.kind === 'raw'" }],
+      "mark": { "type": "line", "strokeWidth": 1, "opacity": 0.55 },
+      "encoding": {
+        "x": { "field": "month", "type": "temporal", "title": null, "axis": { "format": "%b %Y" } },
+        "y": { "field": "value", "type": "quantitative", "title": "share per million views" },
+        "color": { "field": "lang", "type": "nominal", "title": "language" }
+      }
+    },
+    {
+      "data": { "name": "series" },
+      "transform": [{ "filter": "datum.kind === 'rolling'" }],
+      "mark": { "type": "line", "strokeWidth": 3 },
+      "encoding": {
+        "x": { "field": "month", "type": "temporal" },
+        "y": { "field": "value", "type": "quantitative" },
+        "color": { "field": "lang", "type": "nominal" }
+      }
+    },
+    {
+      "data": { "name": "anomalies" },
+      "mark": { "type": "point", "filled": true, "size": 90, "shape": "diamond", "stroke": "black", "strokeWidth": 0.5 },
+      "encoding": {
+        "x": { "field": "month", "type": "temporal" },
+        "y": { "field": "value", "type": "quantitative" },
+        "color": { "field": "lang", "type": "nominal" }
+      }
+    }
+  ],
+  "config": {
+    "background": "white",
+    "view": { "stroke": null }
+  }
+}

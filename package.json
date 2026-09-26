@@ -1,0 +1,32 @@
+{
+  "name": "wiki-interest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Skill: analyze Wikipedia pageview trends for a topic across language editions.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "wi": "NODE_NO_WARNINGS=1 tsx scripts/wiki-interest.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_NO_WARNINGS=1 node --import tsx --test tests/**/*.test.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "p-limit": "^7.3.3",
+    "pdfkit": "^0.20.2",
+    "simple-statistics": "^7.12.0",
+    "svg-to-pdfkit": "^0.1.8",
+    "vega": "^6.4.0",
+    "vega-lite": "^6.4.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/pdfkit": "^0.17.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

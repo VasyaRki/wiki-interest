@@ -1,0 +1,10 @@
+{
+  "searchinfo": { "search": "mercury" },
+  "search": [
+    { "id": "Q613883", "label": "Mercury", "description": "automobile marque of the Ford Motor Company" },
+    { "id": "Q1231263", "label": "Mercury", "description": "commune in Savoie, France" },
+    { "id": "Q308", "label": "Mercury", "description": "first planet from the Solar System and smallest among all, tellurian and with extreme temperatures" },
+    { "id": "Q925", "label": "mercury", "description": "chemical element with symbol Hg and atomic number 80" }
+  ],
+  "success": 1
+}

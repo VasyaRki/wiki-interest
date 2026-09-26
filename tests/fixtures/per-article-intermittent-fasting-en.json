@@ -1,0 +1,7 @@
+{
+  "items": [
+    { "project": "en.wikipedia", "article": "Intermittent_fasting", "granularity": "monthly", "timestamp": "2024010100", "access": "all-access", "agent": "user", "views": 74155 },
+    { "project": "en.wikipedia", "article": "Intermittent_fasting", "granularity": "monthly", "timestamp": "2024020100", "access": "all-access", "agent": "user", "views": 43687 },
+    { "project": "en.wikipedia", "article": "Intermittent_fasting", "granularity": "monthly", "timestamp": "2024030100", "access": "all-access", "agent": "user", "views": 71317 }
+  ]
+}
